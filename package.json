@@ -17,7 +17,7 @@
   "author": "vincent.gorisse@exotec.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vgo-exo/node-red-flow-splitter"
+    "url": "https://github.com/vgo-exo/node-red-contrib-flow-splitter"
   },
   "license": "Apache-2.0",
   "dependencies": {

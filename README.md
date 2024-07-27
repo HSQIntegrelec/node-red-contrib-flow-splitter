@@ -1,16 +1,19 @@
-# node-red-flow-splitter
+# node-red-contrib-flow-splitter
 
-Node-RED plugin to split your flows.json file in individual YAML or JSON files (per tab, subflow and config-node).
+Node-RED plugin to split your **_flows.json_** file in individual YAML or JSON files (per tab, subflow and config-node).
 
 ## Purpose
 
 This plugin is useful if you regularly work with Node-RED in the project mode.
 
-It will make the diffs of your version control much more controlled and readable.
+It will make the diffs of your version control much more controlled and readable :
+
+- The user will be able to commit files individually
+- The nodes are ordered alphabetically with their id
 
 ## Functioning
 
-This plugin does not modify Node-RED core behaviour. Node-RED core will still compile the your flows into the JSON file stipulated in the `package.json`.
+This plugin does not modify Node-RED core behavior. Node-RED core will still compile the flows into the JSON file stipulated in the `package.json`.
 
 The code is executed at each start of the flows, i.e. a start of Node-RED or a "deploy" action.
 
@@ -28,7 +31,7 @@ Default configuration file =
 }
 ```
 
-The user can edit freely this file, the changes are taken into account at the next restart of the flows.
+The user can freely edit the config file, the changes are taken into account at the next restart of the flows.
 
 - `fileFormat`: parsing language for your split source files (either `yaml` or `json`)
 - `destinationFolder`: path where to create the `tabs`, `subflows` and `config-nodes` sub-directories
