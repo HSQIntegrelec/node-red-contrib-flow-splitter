@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-flow-splitter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Split your flows.json file in individual YAML or JSON files (per tab, subflow and config-node).",
   "main": "index.js",
   "keywords": [
