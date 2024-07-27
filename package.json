@@ -1,5 +1,5 @@
 {
-  "name": "@vgo-exo/node-red-flow-splitter",
+  "name": "node-red-contrib-flow-splitter",
   "version": "1.0.0",
   "description": "Split your flows.json file in individual YAML or JSON files (per tab, subflow and config-node).",
   "main": "index.js",
