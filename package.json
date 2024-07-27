@@ -15,7 +15,7 @@
     "tabs-splitter"
   ],
   "author": "vincent.gorisse@exotec.com",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
     "js-yaml": "^4.1.0",
     "eol": "^0.9.1",
