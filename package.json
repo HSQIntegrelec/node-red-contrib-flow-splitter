@@ -1,5 +1,5 @@
 {
-  "name": "node-red-flow-splitter",
+  "name": "@vgo-exo/node-red-flow-splitter",
   "version": "1.0.0",
   "description": "Split your flows.json file in individual YAML or JSON files (per tab, subflow and config-node).",
   "main": "index.js",
@@ -15,6 +15,10 @@
     "tabs-splitter"
   ],
   "author": "vincent.gorisse@exotec.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vgo-exo/node-red-flow-splitter"
+  },
   "license": "Apache-2.0",
   "dependencies": {
     "js-yaml": "^4.1.0",
@@ -28,5 +32,8 @@
     "plugins": {
       "node-red-flow-splitter": "index.js"
     }
+  },
+  "engines": {
+    "node": ">=18.5"
   }
 }
