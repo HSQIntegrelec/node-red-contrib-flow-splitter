@@ -33,12 +33,6 @@ module.exports = function (RED) {
       return
     }
 
-    // Ensure folder tree for source split flows
-    if (!setup.ensureFolderTree(project.path, DEFAULT_CFG.destinationFolder)) {
-      logger.error('Could not construct the source directory.')
-      return
-    }
-
     // Retrieve active flows.json or src
     const projectFlows = setup.getFlowFile(project)
     if (!projectFlows.fileContent) {
