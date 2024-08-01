@@ -12,7 +12,14 @@
     "flows-split",
     "tabs-split",
     "flow-splitter",
-    "tabs-splitter"
+    "tabs-splitter",
+    "version-control",
+    "git",
+    "diff",
+    "svn",
+    "ide",
+    "editor",
+    "code"
   ],
   "author": "vincent.gorisse@exotec.com",
   "repository": {
