@@ -30,7 +30,7 @@
   "node-red": {
     "version": ">=1.3.7",
     "plugins": {
-      "node-red-flow-splitter": "index.js"
+      "node-red-contrib-flow-splitter": "index.js"
     }
   },
   "engines": {
