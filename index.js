@@ -71,9 +71,12 @@ module.exports = function (RED) {
       axios.post(`${baseUrl}/flows`, flowFileObj).then(response => {
         logger.info('Flows updated successfully in Node-RED.');
       }).catch(error => {
-        logger.error(`Error updating flows: ${error.message} : ${error.response ? `${error.response.status} - ${error.response.data}` : 'undefined'}`);
-        node.error(`Error updating flows: ${error.message}`);
-        return
+        if (error.response && typeof error.response.data == "object") {
+          errorMessage = JSON.stringify(error.response.data);
+        } else {
+          errorMessage = error.response.data;
+        }
+        logger.critical(`Error updating flows: ${error.message} : ${error.response ? `${error.response.status} - ${errorMessage}` : 'undefined'}`);
       });
 
     } else {
