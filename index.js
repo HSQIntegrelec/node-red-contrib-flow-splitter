@@ -5,6 +5,7 @@ module.exports = function (RED) {
   const crafter = require('./lib/crafter');
   const filemaker = require('./lib/filemaker');
   const { logger } = require('./lib/logger');
+  const thrower = require('./lib/thrower');
 
   const CFG_FILENAME = '.config.flow-splitter.json';
   const DEFAULT_CFG = {
@@ -76,7 +77,7 @@ module.exports = function (RED) {
         } else {
           errorMessage = error.response.data;
         }
-        logger.critical(`Error updating flows: ${error.message} : ${error.response ? `${error.response.status} - ${errorMessage}` : 'undefined'}`);
+        thrower.throwNodeError(`Error updating flows: ${error.message} : ${error.response ? `${error.response.status} - ${errorMessage}` : 'undefined'}`);
       });
 
     } else {
@@ -122,6 +123,10 @@ module.exports = function (RED) {
         logger.warn(`Could not write the config file '${CFG_FILENAME}'`)
       }
 
+      // Remove the newly pushed flows.json from the project directory to be able to use Node-RED "Project History" tool.
+      if (!filemaker.clearSrcFolder(path.join(project.path, projectFlows.fileName))) {
+        logger.warn(`Failed to remove temporary file '${path.join(project.path, projectFlows.fileName)}', source is '${cfg.destinationFolder}'.`)
+      }
     }
   }
 };
