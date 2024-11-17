@@ -1,132 +1,151 @@
-module.exports = function (RED) {
-  const path = require('path');
-  const axios = require('axios');
-  const setup = require('./lib/setup');
-  const crafter = require('./lib/crafter');
-  const filemaker = require('./lib/filemaker');
-  const { logger } = require('./lib/logger');
-  const thrower = require('./lib/thrower');
+const path = require('path')
+const fs = require('fs')
+const manager = require('flows-file-manager')
+const eol = require('eol')
 
-  const CFG_FILENAME = '.config.flow-splitter.json';
-  const DEFAULT_CFG = {
+/**
+ * Here we define some types to allow the IDE to provide us autocompletion.
+ * Some are documented directly by the nodered team but some are not.
+ * 
+ * That's why we also made an `index.d.ts` for undocumented types we need to manipulate.
+ * Those are defined by analysing the nodered code and some logging of those object.
+ * In this regard, the types defined by ourselve might be incomplete.
+ * 
+ * @typedef {import('./index').noderedEvent.FlowStartedEvent} FlowStartedEventType
+ * @typedef {import('./index').noderedEvent.ExtendedNodeDef} ExtendedNodeDef
+ * @typedef {import("node-red").NodeRedApp} REDType
+ */
+
+
+/**
+ * Exposing the RED runtime globally to avoid passing it in every functions.
+ * @type {REDType}
+ */
+let RED
+
+const splitCfgFilename = '.config.flow-splitter.json'
+const DEFAULT_CFG = {
     fileFormat: 'yaml',
     destinationFolder: 'src',
     tabsOrder: [],
-  };
-
-  // Code to launch on every restart of the flows = boot or deploy event
-  RED.events.on('flows:started', async function () {
-    onReload();
-  });
-
-  /**
-   * Main function. To be executed on each flow restart
-   * @returns {undefined}
-   */
-  function onReload() {
-
-    // Project data and hostname + port from settings
-    const hostname = RED.settings.uiHost || 'localhost';
-    const port = RED.settings.uiPort || 1880;
-    const project = setup.getProject(RED.settings);
-    if (project.isProject && !project.path) {
-      logger.error("Cannot find path of flows.json")
-      return
-    }
-
-    // Retrieve active flows.json or src
-    const projectFlows = setup.getFlowFile(project)
-    if (!projectFlows.fileContent) {
-
-      // 1. Case where only src files were committed or flows.json has been deleted
-      logger.info("JSON flow file from package does not exist. Rebuilding from sources.")
-
-      // Return config file : .config.flow-splitter.json
-      cfg = setup.getCfgFile(project.path, CFG_FILENAME);
-      if (!cfg) {
-        logger.error(`Can not create flow file from source files, missing mandatory config file '${CFG_FILENAME}'`)
-        return
-      }
-
-      // Generate a concatenated 'flowFileObj' Array Object from src
-      if (!projectFlows.fileName) {
-        logger.error(`Missing flow filename from package.json`)
-        return
-      }
-      flowFileObj = filemaker.rebuildFlowsJson(project.path, cfg)
-      if (!(typeof flowFileObj == "object") || Object.prototype.toString.call(flowFileObj) !== '[object Array]' || flowFileObj.length == 0) {
-        logger.warn(`Flow file is undefined or empty`)
-      }
-
-      // Create the flows.json file in project directory from 'flowFileObj'
-      if (!filemaker.makeFlowsJson(flowFileObj, project.path, projectFlows.fileName)) {
-        logger.error(`Failed rebuilding flow JSON file '${projectFlows.fileName}'`)
-        return
-      }
-      logger.info(`Flow file '${projectFlows.fileName}' has been rebuilt correctly from sources for '${project.activeProjectName}'`)
-
-      // Push newly created flows.json to RED API
-      logger.info('Pushing flows to RED API...')
-      const baseUrl = `http://${hostname}:${port}`;
-      logger.debug(`baseUrl = ${baseUrl}`);
-      axios.post(`${baseUrl}/flows`, flowFileObj).then(response => {
-        logger.info('Flows updated successfully in Node-RED.');
-      }).catch(error => {
-        if (error.response && typeof error.response.data == "object") {
-          errorMessage = JSON.stringify(error.response.data);
-        } else {
-          errorMessage = error.response.data;
-        }
-        thrower.throwNodeError(`Error updating flows: ${error.message} : ${error.response ? `${error.response.status} - ${errorMessage}` : 'undefined'}`);
-      });
-
-    } else {
-      // 2. Case where flows.json exists (on deploy)
-      logger.info("Splitting JSON flow file...");
-
-      // Return config file : .config.flow-splitter.json
-      cfg = setup.getCfgFile(project.path, CFG_FILENAME);
-      if (!cfg) {
-        logger.info(`Config file '${CFG_FILENAME}' does not exist. Splitting flows with default parameters and creating the config file.`)
-        cfg = DEFAULT_CFG;
-      }
-
-      // Clean the src folder to recreate all the files
-      if (!filemaker.clearSrcFolder(path.join(project.path, cfg.destinationFolder))) {
-        logger.warn(`Failed to clean folder '${path.join(project.path, cfg.destinationFolder)}'`)
-      }
-
-      // Recreate folder tree
-      if (!setup.ensureFolderTree(project.path, cfg.destinationFolder)) {
-        logger.error('Could not construct the source directory.')
-        return
-      }
-
-      // Craft the individual flows into a flowSet Object
-      const splitProjectFlowSet = crafter.splitFlows(projectFlows.fileContent);
-
-      // Retrieve the position of each tab
-      const tabsOrder = crafter.getTabsOrder(projectFlows.fileContent);
-      cfg.tabsOrder = tabsOrder;
-
-      // Generate the files
-      const FileMaker = new filemaker.FileMaker(path.join(project.path, cfg.destinationFolder), splitProjectFlowSet, cfg.fileFormat);
-      if (!FileMaker.createSplitFiles()) {
-        logger.error(`Failed to generate split source files`)
-        return
-      }
-
-      logger.info("Split succeeded")
-
-      // Create the cfg if it does not exist
-      if (!filemaker.makeOrUpdateCfg(project, CFG_FILENAME, cfg)) {
-        logger.warn(`Could not write the config file '${CFG_FILENAME}'`)
-      }
-
-      // Remove the newly pushed flows.json from the project directory to be able to use Node-RED "Project History" tool.
-      if (!filemaker.clearSrcFolder(path.join(project.path, projectFlows.fileName))) {
-        logger.warn(`Failed to remove temporary file '${path.join(project.path, projectFlows.fileName)}', source is '${cfg.destinationFolder}'.`)
-      }
-    }
-  }
+    monolithFilename: "flows.json"
 };
+
+function writeSplitterConfig(cfg, projectPath) {
+    RED.log.info("[node-red-contrib-flow-splitter] Writing new config")
+    const splitterCfgToWrite = JSON.parse(JSON.stringify(cfg))
+    delete splitterCfgToWrite.monolithFilename
+
+    try {
+        fs.writeFileSync(path.join(projectPath, splitCfgFilename), eol.auto(JSON.stringify(splitterCfgToWrite, null, 2)));
+    } catch (error) {
+        RED.log.warn(`[node-red-contrib-flow-splitter] Could not write splitter config '${splitCfgFilename}': ${error}`)
+    }
+    finally {
+        return
+    }
+}
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * @param {REDType} REDRuntime 
+ */
+module.exports = function (REDRuntime) {
+    RED = REDRuntime
+
+    // We register the pluggin for NodeRed
+    RED.plugins.registerPlugin("node-red-contrib-flow-splitter", {
+        type: "exotec-deploy-plugins",
+        onadd: function () {
+            RED.log.info("[node-red-contrib-flow-splitter] Initialized plugin successfully")
+        },
+
+    })
+
+    // Code to launch on every restart of the flows = boot or deploy event
+    RED.events.on('flows:started', onFlowReload);
+}
+
+
+/**
+ * Main function. To be executed on each flow restart
+ * @param {FlowStartedEventType} flowEventData
+ * @returns {void}
+ */
+async function onFlowReload(flowEventData) {
+    RED.log.info("[node-red-contrib-flow-splitter] Flow restart event")
+
+    const userDir = path.join(RED.settings.userDir)
+    const nrProjectsCfg = JSON.parse(fs.readFileSync(path.join(userDir, '.config.projects.json')))
+    const projectPath = path.join(userDir, 'projects', nrProjectsCfg.activeProject)
+
+    DEFAULT_CFG.monolithFilename = RED.settings.flowFile
+
+    let currentProjectSplitterCfg
+    let flowSet
+
+    RED.log.info("[node-red-contrib-flow-splitter] Fetching current splitter config")
+    currentProjectSplitterCfg = DEFAULT_CFG
+    if (fs.existsSync(path.join(projectPath, splitCfgFilename))) {
+        currentProjectSplitterCfg = JSON.parse(fs.readFileSync(path.join(projectPath, splitCfgFilename)))
+        currentProjectSplitterCfg.monolithFilename = currentProjectSplitterCfg.monolithFilename || RED.settings.flowFile || 'flows.json'
+    }
+
+    if (flowEventData.config.flows.length == 0) {
+        // The flow file registered in the package.json does not exist or is empty.
+        // The script will rebuilt the flows from the split source files and push the resulting flow file to RED runtime.
+
+        RED.log.info("[node-red-contrib-flow-splitter] Rebuilding monolith file from splitter config and source files")
+        flowSet = manager.constructFlowSetFromTreeFiles(currentProjectSplitterCfg || DEFAULT_CFG, projectPath)
+
+        if (!flowSet) {
+            RED.log.error("[node-red-contrib-flow-splitter] Cannot build FlowSet from source tree files")
+            return
+        }
+
+        currentProjectSplitterCfg = manager.constructMonolithFileFromFlowSet(flowSet, currentProjectSplitterCfg || DEFAULT_CFG, projectPath, false)
+        writeSplitterConfig(currentProjectSplitterCfg, projectPath)
+
+        /**
+         * A little trick to require the same "node-red" API to give private access to our own modulesContext. (trick given in monogoto.io project)
+         * @type {REDType}
+         */
+        const PRIVATE_RED = (function requireExistingNoderedInstance() {
+            for (const child of require.main.children) {
+                if (child.filename.endsWith('red.js')) {
+                    return require(child.filename);
+                }
+            }
+            // In case node-red was not required before, just require it
+            return require('node-red');
+        })();
+
+        RED.log.info("[node-red-contrib-flow-splitter] Stopping and loading nodes")
+
+        PRIVATE_RED.nodes.loadFlows(true).then(function () {
+            RED.log.info("[node-red-contrib-flow-splitter] Flows are rebuilt and available")
+        })
+        return
+    }
+
+    else {
+        // Content in the reload of the flows has been found
+        // The script will split the flows into split source files and overwrite the splitter config and delete the monolithic flow file.
+
+        flowSet = manager.constructFlowSetFromMonolithObject(flowEventData.config.flows)
+
+        if (!fs.existsSync(path.join(userDir, '.config.projects.json'))) {
+            RED.log.error("[node-red-contrib-flow-splitter] Cannot find '.config.projects.json' file, the package may have been install in the wrong package.json")
+            return
+        }
+
+        currentProjectSplitterCfg = manager.constructTreeFilesFromFlowSet(flowSet, currentProjectSplitterCfg || DEFAULT_CFG, projectPath)
+        writeSplitterConfig(currentProjectSplitterCfg, projectPath)
+
+        await delay(150) /// waiting 150ms to be sure the newly deployed flowFile is created by Node-RED before erasing it.
+
+        fs.unlinkSync(path.join(projectPath, RED.settings.flowFile))
+    }
+
+}
