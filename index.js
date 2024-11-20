@@ -33,10 +33,9 @@ const DEFAULT_CFG = {
 
 function writeSplitterConfig(cfg, projectPath) {
     RED.log.info("[node-red-contrib-flow-splitter] Writing new config")
-    const splitterCfgToWrite = JSON.parse(JSON.stringify(cfg))
-    delete splitterCfgToWrite.monolithFilename
-
     try {
+        const splitterCfgToWrite = JSON.parse(JSON.stringify(cfg))
+        delete splitterCfgToWrite.monolithFilename
         fs.writeFileSync(path.join(projectPath, splitCfgFilename), eol.auto(JSON.stringify(splitterCfgToWrite, null, 2)));
     } catch (error) {
         RED.log.warn(`[node-red-contrib-flow-splitter] Could not write splitter config '${splitCfgFilename}': ${error}`)
@@ -46,11 +45,10 @@ function writeSplitterConfig(cfg, projectPath) {
     }
 }
 
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
  * @param {REDType} REDRuntime 
- */
+*/
 module.exports = function (REDRuntime) {
     RED = REDRuntime
 
@@ -72,11 +70,17 @@ module.exports = function (REDRuntime) {
  * Main function. To be executed on each flow restart
  * @param {FlowStartedEventType} flowEventData
  * @returns {void}
- */
+*/
 async function onFlowReload(flowEventData) {
     RED.log.info("[node-red-contrib-flow-splitter] Flow restart event")
 
     const userDir = path.join(RED.settings.userDir)
+
+    if (!fs.existsSync(path.join(userDir || '.', '.config.projects.json'))) {
+        RED.log.error("[node-red-contrib-flow-splitter] Cannot find '.config.projects.json' file, the package may have been install in the wrong package.json")
+        return
+    }
+
     const nrProjectsCfg = JSON.parse(fs.readFileSync(path.join(userDir, '.config.projects.json')))
     const projectPath = path.join(userDir, 'projects', nrProjectsCfg.activeProject)
 
@@ -110,7 +114,7 @@ async function onFlowReload(flowEventData) {
         /**
          * A little trick to require the same "node-red" API to give private access to our own modulesContext. (trick given in monogoto.io project)
          * @type {REDType}
-         */
+        */
         const PRIVATE_RED = (function requireExistingNoderedInstance() {
             for (const child of require.main.children) {
                 if (child.filename.endsWith('red.js')) {
@@ -135,17 +139,19 @@ async function onFlowReload(flowEventData) {
 
         flowSet = manager.constructFlowSetFromMonolithObject(flowEventData.config.flows)
 
-        if (!fs.existsSync(path.join(userDir, '.config.projects.json'))) {
-            RED.log.error("[node-red-contrib-flow-splitter] Cannot find '.config.projects.json' file, the package may have been install in the wrong package.json")
-            return
-        }
-
         currentProjectSplitterCfg = manager.constructTreeFilesFromFlowSet(flowSet, currentProjectSplitterCfg || DEFAULT_CFG, projectPath)
         writeSplitterConfig(currentProjectSplitterCfg, projectPath)
 
-        await delay(150) /// waiting 150ms to be sure the newly deployed flowFile is created by Node-RED before erasing it.
-
-        fs.unlinkSync(path.join(projectPath, RED.settings.flowFile))
+        try {
+            const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+            await delay(150) /// waiting 150ms to be sure the newly deployed flowFile is created by Node-RED before erasing it.
+            fs.unlinkSync(path.join(projectPath, RED.settings.flowFile))
+        } catch (error) {
+            RED.log.warn(`[node-red-contrib-flow-splitter] Cannot erase file '${RED.settings.flowFile}'`)
+        }
+        finally {
+            return
+        }
     }
 
 }
